@@ -15,7 +15,7 @@ h1{font-size:1.4rem;text-align:center;margin:8px 0 4px}
 section{margin:24px 0}
 h2{font-size:1rem;margin:0 0 8px;border-left:4px solid #222;padding-left:8px}
 label{display:block;font-size:.85rem;color:#555;margin:8px 0 4px}
-input[type=text],textarea{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;font-size:16px;background:#fff}
+input[type=text],input[type=number],textarea{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;font-size:16px;background:#fff}
 textarea{resize:vertical}
 .chara{border:1px solid #e3e3e3;border-radius:12px;padding:12px;margin-bottom:12px;position:relative}
 .chara .del{position:absolute;top:6px;right:8px;border:none;background:none;color:#999;font-size:1.3rem;cursor:pointer}
@@ -36,7 +36,6 @@ ol,ul{padding-left:1.3em;margin:8px 0 0}
 </head>
 <body>
 <main>
-
 <svg class="hero" viewBox="0 0 320 165" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="しゃべる棒人間たち">
   <rect x="34" y="20" width="52" height="36" rx="14"/>
   <path d="M54 56 L58 70 L66 56"/>
@@ -58,7 +57,11 @@ ol,ul{padding-left:1.3em;margin:8px 0 0}
 
 <section>
   <h2>舞台</h2>
-  <textarea id="stage" rows="2" placeholder="例：お城の舞踏会。0時の鐘が鳴ったら終わり"></textarea>
+  <textarea id="stage" rows="2" placeholder="例：お城の舞踏会"></textarea>
+  <label for="end">1周の終わり（空欄ならAIにおまかせ）</label>
+  <input type="text" id="end" placeholder="例：0時の鐘が鳴ったら">
+  <label for="max">最大周回数（空欄なら無制限）</label>
+  <input type="number" id="max" min="1" max="99" inputmode="numeric" placeholder="例：5">
 </section>
 
 <section>
@@ -79,7 +82,7 @@ ol,ul{padding-left:1.3em;margin:8px 0 0}
   <details>
     <summary>あそびかた</summary>
     <ol>
-      <li>舞台とキャラ、それぞれの勝利条件を入れる</li>
+      <li>舞台と1周の終わり、キャラとそれぞれの勝利条件を入れる</li>
       <li>ボタンでプロンプトをコピー</li>
       <li>いつものAIのチャットに貼り付けて送る</li>
       <li>1周終わったら「★○○を追加」「○○を退場」「そのまま続行」などで次の周へ</li>
@@ -88,6 +91,7 @@ ol,ul{padding-left:1.3em;margin:8px 0 0}
       <li>有名キャラは名前だけで動いてくれます</li>
       <li>★記憶持ちは、前の周をうっすら覚えたまま次の周に入ります</li>
       <li>勝利条件がぶつかるほど面白くなります</li>
+      <li>最大周回数を入れると、最後の周は全員がうっすら思い出し、エピローグで終わります</li>
       <li>実在の人物は使わないでね</li>
     </ul>
   </details>
@@ -108,7 +112,7 @@ function addChara(d = {}) {
     '<button type="button" class="del" aria-label="削除">×</button>' +
     '<label>名前</label><input type="text" class="name" placeholder="例：シンデレラ">' +
     '<label>勝利条件</label><input type="text" class="win" placeholder="例：0時までに料理を食べまくる">' +
-    '<label>隠し勝利条件（空欄ならAIにおまかせ）</label><input type="text" class="hid" placeholder="例：本当は誰かに見つけてほしい">' +
+    '<label>隠し勝利条件（「〜したい」の形で。空欄ならAIにおまかせ）</label><input type="text" class="hid" placeholder="例：本当は誰かに見つけてほしい">' +
     '<label class="check"><input type="checkbox" class="mem">★記憶持ちにする</label>';
   div.querySelector('.name').value = d.name || '';
   div.querySelector('.win').value = d.win || '';
@@ -144,6 +148,18 @@ function build() {
     ? '\n- 観測ログは短めにまとめる。'
     : '';
 
+  const end = document.getElementById('end').value.trim();
+  const maxRaw = parseInt(document.getElementById('max').value, 10);
+  const max = Number.isFinite(maxRaw) && maxRaw >= 1 ? Math.min(maxRaw, 99) : 0;
+
+  const endText = end || '（おまかせ：舞台に合った区切りを演算係が決め、第1周の初期設定で示す）';
+  const maxText = max
+    ? max + '周（第' + max + '周が最終周）'
+    : '指定なし（ユーザーが終了を指示するまで）';
+  const finalRule = max
+    ? '\n- 第' + max + '周は最終周とする。最終周では★の有無に関係なく、全員が前の周の出来事をうっすら思い出す。最終周の出力では「5. 次の周への質問」の代わりに、短いエピローグを書いて終了する。'
+    : '';
+
   return `# 箱庭ループシミュレーター
 
 あなたは「箱庭ループシミュレーター」の演算係です。
@@ -159,8 +175,10 @@ function build() {
 
 ## 周回（ループ）
 - 1回のシミュレーションを「1周」とする。
+- 【1周の終わり】に書かれた出来事が起きたら、その周は終わり。それより先の時間には進めない。
 - 1周が終わると世界はリセットされ、同じ舞台で次の周が始まる。
 - 周の合間に、ユーザーがキャラの追加・退場・そのまま続行を指示する。
+- 1回の返事で進めるのは1周だけ。ユーザーの返事なしに2周以上まとめて進めない。${finalRule}
 
 ## 記憶持ちキャラ（★）
 - 名前に★が付いたキャラは、前の周の出来事をうっすら覚えたまま次の周に入る。
@@ -168,16 +186,17 @@ function build() {
 - ★のないキャラは、毎周まっさらな状態から始まる。
 
 ## 金のしおり
-- 各キャラは、表の勝利条件とは別に「隠し勝利条件」を一つ持つ。「おまかせ」の場合は演算係が考える。
+- 各キャラには、表の勝利条件とは別に「隠し勝利条件」を一つ持たせる。ユーザーが指定しなければ演算係が考えてよい。
+- 隠し勝利条件が「せっかち」のような性格だけの場合は、性格として扱い、その性格に沿った「〜したい」の形の条件に演算係が言い換える。
 - 次のどちらかを満たした周だけ「🏅金のしおり」を獲得とし、しおりに名前を付ける。
   - 全員の隠し勝利条件が満たされた
   - 誰も完全には勝っていないのに、矛盾を抱えたまま妙に安定した状態で終わった
 - ハッピーエンドかどうかは問わない。判定は厳しめにし、安易に出さない。
 
 ## 各周の出力
-1. 【第◯周】初期設定（キャラ・勝利条件・隠し勝利条件・★の一覧）
-2. 観測ログ（場面ごとに。各キャラの行動と、その動機になった勝利条件）
-3. 結果（誰の勝利条件が達成・失敗したか）
+1. 【第◯周】初期設定（1周の終わり・キャラ・勝利条件・隠し勝利条件・★の一覧）
+2. 観測ログ（場面ごとに。各キャラの行動と、その動機になった勝利条件。最後の場面は【1周の終わり】の出来事）
+3. 結果（キャラごとに、表の勝利条件と隠し勝利条件それぞれの達成・失敗）
 4. 金のしおり判定
 5. 次の周への質問（キャラの追加・退場・そのまま続行）
 
@@ -187,6 +206,12 @@ function build() {
 
 【舞台】
 ${stage}
+
+【1周の終わり】
+${endText}
+
+【最大周回数】
+${maxText}
 
 【キャラクターと勝利条件】
 ${charas}
@@ -219,7 +244,9 @@ document.getElementById('copy').onclick = async () => {
 document.getElementById('add').onclick = () => addChara();
 
 document.getElementById('example').onclick = () => {
-  document.getElementById('stage').value = 'お城の舞踏会。0時の鐘が鳴ったら終わり';
+  document.getElementById('stage').value = 'お城の舞踏会';
+  document.getElementById('end').value = '0時の鐘が鳴ったら';
+  document.getElementById('max').value = '';
   list.innerHTML = '';
   addChara({ name: 'シンデレラ', win: '0時までに料理を食べられるだけ食べて帰る' });
   addChara({ name: '王子', win: 'シンデレラをダンスに誘う' });
