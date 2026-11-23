@@ -82,7 +82,7 @@ ol,ul{padding-left:1.3em;margin:8px 0 0}
   <details>
     <summary>あそびかた</summary>
     <ol>
-      <li>舞台と1周の終わり、キャラとそれぞれの勝利条件を入れる</li>
+      <li>舞台と1周の終わり、キャラとそれぞれの勝利条件を入れる（キャラは名前か設定のどちらかだけでもOK）</li>
       <li>ボタンでプロンプトをコピー</li>
       <li>いつものAIのチャットに貼り付けて送る</li>
       <li>1周終わったら「★○○を追加」「○○を退場」「そのまま続行」などで次の周へ</li>
@@ -91,6 +91,8 @@ ol,ul{padding-left:1.3em;margin:8px 0 0}
       <li>有名キャラは名前だけで動いてくれます</li>
       <li>★記憶持ちは、前の周をうっすら覚えたまま次の周に入ります</li>
       <li>勝利条件がぶつかるほど面白くなります</li>
+      <li>名前を空欄にすると、キャラ設定に合った名前をAIが付けます</li>
+      <li>隠し勝利条件はAIが考えて、金のしおり判定のときに明かします</li>
       <li>最大周回数を入れると、最後の周は全員がうっすら思い出し、エピローグで終わります</li>
       <li>実在の人物は使わないでね</li>
     </ul>
@@ -110,13 +112,13 @@ function addChara(d = {}) {
   div.className = 'chara';
   div.innerHTML =
     '<button type="button" class="del" aria-label="削除">×</button>' +
-    '<label>名前</label><input type="text" class="name" placeholder="例：シンデレラ">' +
+    '<label>名前（空欄ならAIが命名）</label><input type="text" class="name" placeholder="例：シンデレラ">' +
+    '<label>キャラ設定（空欄ならAIにおまかせ）</label><input type="text" class="set" placeholder="例：ピンク髪の正ヒロイン">' +
     '<label>勝利条件</label><input type="text" class="win" placeholder="例：0時までに料理を食べまくる">' +
-    '<label>隠し勝利条件（「〜したい」の形で。空欄ならAIにおまかせ）</label><input type="text" class="hid" placeholder="例：本当は誰かに見つけてほしい">' +
     '<label class="check"><input type="checkbox" class="mem">★記憶持ちにする</label>';
   div.querySelector('.name').value = d.name || '';
+  div.querySelector('.set').value = d.set || '';
   div.querySelector('.win').value = d.win || '';
-  div.querySelector('.hid').value = d.hid || '';
   div.querySelector('.mem').checked = !!d.mem;
   div.querySelector('.del').onclick = () => div.remove();
   list.appendChild(div);
@@ -131,17 +133,18 @@ function build() {
   const stage = document.getElementById('stage').value.trim();
   const rows = [...list.querySelectorAll('.chara')].map(c => ({
     name: c.querySelector('.name').value.trim(),
+    set: c.querySelector('.set').value.trim(),
     win: c.querySelector('.win').value.trim(),
-    hid: c.querySelector('.hid').value.trim(),
     mem: c.querySelector('.mem').checked
-  })).filter(r => r.name);
+  })).filter(r => r.name || r.set);
 
   if (!stage) { show('舞台を入れてください', true); return null; }
-  if (rows.length < 2) { show('キャラクターを2人以上入れてください', true); return null; }
+  if (rows.length < 2) { show('キャラクターを2人以上入れてください（名前かキャラ設定のどちらかでOK）', true); return null; }
 
   const charas = rows.map(r =>
-    '- ' + (r.mem ? '★' : '') + r.name + '：' + (r.win || '（おまかせ）') +
-    '／隠し勝利条件：' + (r.hid || '（おまかせ）')
+    '- ' + (r.mem ? '★' : '') + (r.name || '（名前はおまかせ）') +
+    '／設定：' + (r.set || '（おまかせ）') +
+    '／勝利条件：' + (r.win || '（おまかせ）')
   ).join('\n');
 
   const shortLine = document.getElementById('short').checked
@@ -169,7 +172,8 @@ function build() {
 - 各キャラクターは、自分の勝利条件を叶えるために自分の判断で動く。
 - キャラ同士の勝利条件や、物語全体の結末は、矛盾・衝突してよい。
 - 無理に和解やハッピーエンドに寄せない。事故・誤解・すれ違い・バッドエンドも正規の結果として扱う。
-- 有名キャラは原作の性格・口調で動かす。設定のないキャラは、名前と勝利条件から自然に性格を決める。
+- 有名キャラは原作の性格・口調で動かす。キャラ設定があれば、それをもとに性格・口調・行動を膨らませる。設定のないキャラは、名前と勝利条件から自然に性格を決める。
+- 「名前はおまかせ」のキャラは、設定に合った名前を演算係が付ける。一度付けた名前は、以降の周でも変えない。
 - 世界観の説明や理屈付けは最小限にし、行動と会話で進める。
 - 実在の人物は登場させない。${shortLine}
 
@@ -186,18 +190,21 @@ function build() {
 - ★のないキャラは、毎周まっさらな状態から始まる。
 
 ## 金のしおり
-- 各キャラには、表の勝利条件とは別に「隠し勝利条件」を一つ持たせる。ユーザーが指定しなければ演算係が考えてよい。
-- 隠し勝利条件が「せっかち」のような性格だけの場合は、性格として扱い、その性格に沿った「〜したい」の形の条件に演算係が言い換える。
+- 各キャラには、表の勝利条件とは別に「隠し勝利条件」を一つ持たせる。隠し勝利条件は演算係がキャラ設定をもとに考える。
+- 隠し勝利条件は、表の勝利条件の言い換えではなく、表とは違う本音や、表と矛盾する願いにする。「〜したい」の形で、達成・失敗を判定できるものにする。
+- 隠し勝利条件は第1周で決めたら以降の周も変えない。途中から追加されたキャラは、登場した周で決める。
+- 隠し勝利条件は、金のしおり判定までユーザーに見せない。初期設定や観測ログでは伏せたまま動かす。
+- 一度公開された隠し勝利条件は、★記憶持ちキャラもうっすら覚えている。
 - 次のどちらかを満たした周だけ「🏅金のしおり」を獲得とし、しおりに名前を付ける。
   - 全員の隠し勝利条件が満たされた
   - 誰も完全には勝っていないのに、矛盾を抱えたまま妙に安定した状態で終わった
 - ハッピーエンドかどうかは問わない。判定は厳しめにし、安易に出さない。
 
 ## 各周の出力
-1. 【第◯周】初期設定（1周の終わり・キャラ・勝利条件・隠し勝利条件・★の一覧）
-2. 観測ログ（場面ごとに。各キャラの行動と、その動機になった勝利条件。最後の場面は【1周の終わり】の出来事）
-3. 結果（キャラごとに、表の勝利条件と隠し勝利条件それぞれの達成・失敗）
-4. 金のしおり判定
+1. 【第◯周】初期設定（1周の終わり・キャラの名前・設定・表の勝利条件・★の一覧。隠し勝利条件は書かない）
+2. 観測ログ（場面ごとに。各キャラの行動と、その動機になった表の勝利条件。最後の場面は【1周の終わり】の出来事）
+3. 結果（キャラごとに、表の勝利条件の達成・失敗）
+4. 🏅金のしおり判定（全員の隠し勝利条件をここで公開し、キャラごとに達成・失敗と、その根拠を1行で書く。そのうえで金のしおりの獲得を判定する）
 5. 次の周への質問（キャラの追加・退場・そのまま続行）
 
 ユーザーの指示を受けてから次の周に進むこと。
@@ -250,8 +257,8 @@ document.getElementById('example').onclick = () => {
   list.innerHTML = '';
   addChara({ name: 'シンデレラ', win: '0時までに料理を食べられるだけ食べて帰る' });
   addChara({ name: '王子', win: 'シンデレラをダンスに誘う' });
-  addChara({ name: '継母', win: '娘たちを王子に紹介する' });
-  addChara({ name: '魔法使い', win: '今度こそガラスの靴を落とさせない', mem: true });
+  addChara({ set: '王子の幼馴染。ピンク髪で自称・正ヒロイン', win: '王子とラストダンスを踊る' });
+  addChara({ name: '魔法使い', set: '心配性', win: '今度こそガラスの靴を落とさせない', mem: true });
   show('例を入れました', false);
 };
 
