@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>箱庭ループシミュレーター</title>
+<meta name="description" content="舞台・キャラ・勝利条件を入れるだけ。いつものAIでキャラが勝手に動く箱庭遊びのプロンプトを作ります。">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:#222;font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.7}
+main{max-width:560px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.4rem;text-align:center;margin:8px 0 4px}
+.lead{text-align:center;color:#666;font-size:.9rem;margin:0 0 8px}
+.hero{display:block;margin:0 auto 8px;width:100%;max-width:320px}
+section{margin:24px 0}
+h2{font-size:1rem;margin:0 0 8px;border-left:4px solid #222;padding-left:8px}
+label{display:block;font-size:.85rem;color:#555;margin:8px 0 4px}
+input[type=text],textarea{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;font-size:16px;background:#fff}
+textarea{resize:vertical}
+.chara{border:1px solid #e3e3e3;border-radius:12px;padding:12px;margin-bottom:12px;position:relative}
+.chara .del{position:absolute;top:6px;right:8px;border:none;background:none;color:#999;font-size:1.3rem;cursor:pointer}
+.check{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:.9rem;color:#333}
+.check input{width:18px;height:18px;margin:0}
+button{font:inherit;cursor:pointer}
+.row{display:flex;gap:8px}
+.sub{flex:1;padding:10px;border:1px dashed #aaa;background:#fafafa;border-radius:8px;color:#444}
+.main{width:100%;padding:14px;border:none;border-radius:999px;background:#222;color:#fff;font-size:1.05rem;font-weight:bold}
+.msg{text-align:center;font-size:.9rem;min-height:1.6em;margin:8px 0}
+.msg.err{color:#c0392b}
+#out{font-size:.8rem;color:#444;background:#f7f7f7;height:200px;display:none}
+details{border:1px solid #e3e3e3;border-radius:12px;padding:10px 14px}
+summary{cursor:pointer;font-weight:bold}
+ol,ul{padding-left:1.3em;margin:8px 0 0}
+.note{font-size:.8rem;color:#888;text-align:center;margin-top:32px}
+</style>
+</head>
+<body>
+<main>
+
+<svg class="hero" viewBox="0 0 320 165" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="しゃべる棒人間たち">
+  <rect x="34" y="20" width="52" height="36" rx="14"/>
+  <path d="M54 56 L58 70 L66 56"/>
+  <text x="60" y="45" font-size="20" text-anchor="middle" fill="#222" stroke="none">！</text>
+  <ellipse cx="160" cy="34" rx="30" ry="20"/>
+  <path d="M152 52 L158 66 L166 53"/>
+  <text x="160" y="41" font-size="20" text-anchor="middle" fill="#222" stroke="none">？</text>
+  <rect x="234" y="20" width="52" height="36" rx="14"/>
+  <path d="M254 56 L258 70 L266 56"/>
+  <text x="260" y="44" font-size="20" text-anchor="middle" fill="#222" stroke="none">…</text>
+  <circle cx="60" cy="88" r="12"/><path d="M60 100 V130 M60 110 L46 122 M60 110 L74 122 M60 130 L50 150 M60 130 L70 150"/>
+  <circle cx="160" cy="88" r="12"/><path d="M160 100 V130 M160 110 L146 96 M160 110 L174 96 M160 130 L150 150 M160 130 L170 150"/>
+  <circle cx="260" cy="88" r="12"/><path d="M260 100 V130 M260 110 L246 122 M260 110 L274 122 M260 130 L250 150 M260 130 L270 150"/>
+  <path d="M20 152 H300" stroke-width="2" stroke="#bbb"/>
+</svg>
+
+<h1>箱庭ループシミュレーター</h1>
+<p class="lead">舞台・キャラ・勝利条件を入れるだけ。<br>いつものAIの中で、キャラが勝手に動き出します。</p>
+
+<section>
+  <h2>舞台</h2>
+  <textarea id="stage" rows="2" placeholder="例：お城の舞踏会。0時の鐘が鳴ったら終わり"></textarea>
+</section>
+
+<section>
+  <h2>キャラクターと勝利条件</h2>
+  <div id="charas"></div>
+  <div class="row">
+    <button type="button" class="sub" id="add">＋ キャラを追加</button>
+    <button type="button" class="sub" id="example">例を入れる</button>
+  </div>
+  <label class="check"><input type="checkbox" id="short" checked>観測ログを短めにする</label>
+</section>
+
+<button type="button" class="main" id="copy">プロンプトを作ってコピー</button>
+<p class="msg" id="msg"></p>
+<textarea id="out" readonly></textarea>
+
+<section>
+  <details>
+    <summary>あそびかた</summary>
+    <ol>
+      <li>舞台とキャラ、それぞれの勝利条件を入れる</li>
+      <li>ボタンでプロンプトをコピー</li>
+      <li>いつものAIのチャットに貼り付けて送る</li>
+      <li>1周終わったら「★○○を追加」「○○を退場」「そのまま続行」などで次の周へ</li>
+    </ol>
+    <ul>
+      <li>有名キャラは名前だけで動いてくれます</li>
+      <li>★記憶持ちは、前の周をうっすら覚えたまま次の周に入ります</li>
+      <li>勝利条件がぶつかるほど面白くなります</li>
+      <li>実在の人物は使わないでね</li>
+    </ul>
+  </details>
+</section>
+
+<p class="note">入力した内容はどこにも送信されません。</p>
+</main>
+
+<script>
+const list = document.getElementById('charas');
+const msg = document.getElementById('msg');
+const out = document.getElementById('out');
+
+function addChara(d = {}) {
+  const div = document.createElement('div');
+  div.className = 'chara';
+  div.innerHTML =
+    '<button type="button" class="del" aria-label="削除">×</button>' +
+    '<label>名前</label><input type="text" class="name" placeholder="例：シンデレラ">' +
+    '<label>勝利条件</label><input type="text" class="win" placeholder="例：0時までに料理を食べまくる">' +
+    '<label>隠し勝利条件（空欄ならAIにおまかせ）</label><input type="text" class="hid" placeholder="例：本当は誰かに見つけてほしい">' +
+    '<label class="check"><input type="checkbox" class="mem">★記憶持ちにする</label>';
+  div.querySelector('.name').value = d.name || '';
+  div.querySelector('.win').value = d.win || '';
+  div.querySelector('.hid').value = d.hid || '';
+  div.querySelector('.mem').checked = !!d.mem;
+  div.querySelector('.del').onclick = () => div.remove();
+  list.appendChild(div);
+}
+
+function show(text, isErr) {
+  msg.textContent = text;
+  msg.className = 'msg' + (isErr ? ' err' : '');
+}
+
+function build() {
+  const stage = document.getElementById('stage').value.trim();
+  const rows = [...list.querySelectorAll('.chara')].map(c => ({
+    name: c.querySelector('.name').value.trim(),
+    win: c.querySelector('.win').value.trim(),
+    hid: c.querySelector('.hid').value.trim(),
+    mem: c.querySelector('.mem').checked
+  })).filter(r => r.name);
+
+  if (!stage) { show('舞台を入れてください', true); return null; }
+  if (rows.length < 2) { show('キャラクターを2人以上入れてください', true); return null; }
+
+  const charas = rows.map(r =>
+    '- ' + (r.mem ? '★' : '') + r.name + '：' + (r.win || '（おまかせ）') +
+    '／隠し勝利条件：' + (r.hid || '（おまかせ）')
+  ).join('\n');
+
+  const shortLine = document.getElementById('short').checked
+    ? '\n- 観測ログは短めにまとめる。'
+    : '';
+
+  return `# 箱庭ループシミュレーター
+
+あなたは「箱庭ループシミュレーター」の演算係です。
+下の【舞台】【キャラクター】をもとに、キャラクターたちが勝手に動く様子をシミュレーションし、観測ログとして出力してください。
+
+## 基本ルール
+- 各キャラクターは、自分の勝利条件を叶えるために自分の判断で動く。
+- キャラ同士の勝利条件や、物語全体の結末は、矛盾・衝突してよい。
+- 無理に和解やハッピーエンドに寄せない。事故・誤解・すれ違い・バッドエンドも正規の結果として扱う。
+- 有名キャラは原作の性格・口調で動かす。設定のないキャラは、名前と勝利条件から自然に性格を決める。
+- 世界観の説明や理屈付けは最小限にし、行動と会話で進める。
+- 実在の人物は登場させない。${shortLine}
+
+## 周回（ループ）
+- 1回のシミュレーションを「1周」とする。
+- 1周が終わると世界はリセットされ、同じ舞台で次の周が始まる。
+- 周の合間に、ユーザーがキャラの追加・退場・そのまま続行を指示する。
+
+## 記憶持ちキャラ（★）
+- 名前に★が付いたキャラは、前の周の出来事をうっすら覚えたまま次の周に入る。
+- 記憶持ちは前の周の失敗を避けようと動くが、その行動が周りにどう見えるかは保証されない。善意が裏目に出てもよい。
+- ★のないキャラは、毎周まっさらな状態から始まる。
+
+## 金のしおり
+- 各キャラは、表の勝利条件とは別に「隠し勝利条件」を一つ持つ。「おまかせ」の場合は演算係が考える。
+- 次のどちらかを満たした周だけ「🏅金のしおり」を獲得とし、しおりに名前を付ける。
+  - 全員の隠し勝利条件が満たされた
+  - 誰も完全には勝っていないのに、矛盾を抱えたまま妙に安定した状態で終わった
+- ハッピーエンドかどうかは問わない。判定は厳しめにし、安易に出さない。
+
+## 各周の出力
+1. 【第◯周】初期設定（キャラ・勝利条件・隠し勝利条件・★の一覧）
+2. 観測ログ（場面ごとに。各キャラの行動と、その動機になった勝利条件）
+3. 結果（誰の勝利条件が達成・失敗したか）
+4. 金のしおり判定
+5. 次の周への質問（キャラの追加・退場・そのまま続行）
+
+ユーザーの指示を受けてから次の周に進むこと。
+
+---
+
+【舞台】
+${stage}
+
+【キャラクターと勝利条件】
+${charas}
+
+準備ができたら第1周を始めてください。`;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    out.style.display = 'block';
+    out.focus();
+    out.select();
+    try { return document.execCommand('copy'); } catch (e2) { return false; }
+  }
+}
+
+document.getElementById('copy').onclick = async () => {
+  const text = build();
+  if (!text) return;
+  out.value = text;
+  out.style.display = 'block';
+  const ok = await copyText(text);
+  show(ok ? 'コピーしました！ いつものAIに貼り付けてね'
+          : 'コピーできなかったので、下の枠を長押ししてコピーしてね', !ok);
+};
+
+document.getElementById('add').onclick = () => addChara();
+
+document.getElementById('example').onclick = () => {
+  document.getElementById('stage').value = 'お城の舞踏会。0時の鐘が鳴ったら終わり';
+  list.innerHTML = '';
+  addChara({ name: 'シンデレラ', win: '0時までに料理を食べられるだけ食べて帰る' });
+  addChara({ name: '王子', win: 'シンデレラをダンスに誘う' });
+  addChara({ name: '継母', win: '娘たちを王子に紹介する' });
+  addChara({ name: '魔法使い', win: '今度こそガラスの靴を落とさせない', mem: true });
+  show('例を入れました', false);
+};
+
+addChara(); addChara(); addChara();
+</script>
+</body>
+</html>
