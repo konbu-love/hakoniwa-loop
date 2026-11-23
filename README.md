@@ -6,7 +6,7 @@ ChatGPT、Gemini、Claudeなど、普段使っているAIのチャットにそ�
 
 ## 遊ぶ
 
-https://konbu-love.github.io/（hakoniwa-loop）/
+https://konbu-love.github.io/hakoniwa-loop/
 
 スマホのブラウザで動きます。インストールも登録もいりません。
 
